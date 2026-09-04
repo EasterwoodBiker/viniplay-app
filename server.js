@@ -424,6 +424,12 @@ const PROXY_AUTH_TRUSTED_IPS = (process.env.PROXY_AUTH_TRUSTED_IPS || '')
     .split(',').map(s => s.trim()).filter(Boolean);
 const PROXY_AUTH_ADMIN_USERS = (process.env.PROXY_AUTH_ADMIN_USERS || '')
     .split(',').map(s => s.trim()).filter(Boolean);
+// Where to send the browser on logout when proxy auth is active. Without this, the
+// app's logout only clears the ViniPlay session and the very next request is
+// re-authenticated by the proxy header — so the user never actually leaves. Point it
+// at the proxy's sign-out (e.g. "/oauth2/sign_out" for oauth2-proxy) to end the
+// upstream session too.
+const PROXY_AUTH_LOGOUT_URL = (process.env.PROXY_AUTH_LOGOUT_URL || '').trim();
 
 if (PROXY_AUTH_ENABLED) {
     if (PROXY_AUTH_TRUSTED_IPS.length === 0) {
@@ -1822,7 +1828,11 @@ app.post('/api/auth/logout', (req, res) => {
         }
         res.clearCookie('connect.sid');
         console.log(`[AUTH_API] User ${username} logged out. Session destroyed.`);
-        res.json({ success: true });
+        // Under reverse-proxy auth, a plain reload would be re-authenticated by the
+        // proxy header immediately; hand the client the proxy sign-out URL so it can
+        // actually leave (when configured).
+        const redirect = (PROXY_AUTH_ENABLED && PROXY_AUTH_LOGOUT_URL) ? PROXY_AUTH_LOGOUT_URL : null;
+        res.json({ success: true, redirect });
     });
 });
 
