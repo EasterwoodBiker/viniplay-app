@@ -471,10 +471,22 @@ function ipMatchesList(ip, list) {
 // first sight. New users become admin if listed in PROXY_AUTH_ADMIN_USERS, or if
 // no admin exists yet (bootstrap, so the first SSO user can administer). The local
 // password is left NULL — these users authenticate only through the proxy.
+// An identity listed in PROXY_AUTH_ADMIN_USERS is also promoted to admin if its
+// account already exists as non-admin (grant only — the list never removes admin).
 function findOrProvisionProxyUser(identity, callback) {
     db.get("SELECT * FROM users WHERE username = ?", [identity], (err, user) => {
         if (err) return callback(err);
-        if (user) return callback(null, user);
+        if (user) {
+            if (PROXY_AUTH_ADMIN_USERS.includes(identity) && user.isAdmin !== 1) {
+                return db.run("UPDATE users SET isAdmin = 1 WHERE id = ?", [user.id], (uerr) => {
+                    if (uerr) return callback(uerr);
+                    console.log(`[PROXY_AUTH] Promoted existing user "${identity}" to admin (in PROXY_AUTH_ADMIN_USERS).`);
+                    user.isAdmin = 1;
+                    callback(null, user);
+                });
+            }
+            return callback(null, user);
+        }
         db.get("SELECT COUNT(*) as count FROM users WHERE isAdmin = 1", [], (err2, row) => {
             if (err2) return callback(err2);
             const isAdmin = (PROXY_AUTH_ADMIN_USERS.includes(identity) || row.count === 0) ? 1 : 0;
