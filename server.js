@@ -374,14 +374,15 @@ if (sessionSecret.includes('replace_this')) {
     console.warn('[SECURITY] Using a weak or default SESSION_SECRET. Please replace it.');
 }
 
-// Give the session store's SQLite connection a busy_timeout so a write waits for a
-// held lock instead of failing immediately with SQLITE_BUSY. This matters when the
-// shared DB is briefly busy (e.g. startup source processing) or when several
-// requests persist a session at nearly the same moment — notably the burst of
-// parallel API calls a client fires on first load when reverse-proxy auth
-// (PROXY_AUTH_ENABLED) logs it in.
+// Harden the session store's SQLite connection against "SQLITE_BUSY: database is
+// locked" when several writes land at once — e.g. the burst of parallel API calls a
+// client fires on first load, each auto-logged-in by reverse-proxy auth, or while
+// startup source processing holds the shared DB. busy_timeout makes a write wait for
+// a held lock instead of failing immediately; WAL lets readers and a writer proceed
+// concurrently and avoids the immediate-BUSY lock-promotion case between two writers.
 const sessionStore = new SQLiteStore({ db: 'viniplay.db', dir: DATA_DIR, table: 'sessions' });
 sessionStore.db.run('PRAGMA busy_timeout = 8000');
+sessionStore.db.run('PRAGMA journal_mode = WAL');
 
 app.use(
     session({
