@@ -142,6 +142,19 @@ All configuration is done via the web interface in the **Settings** tab.
 -   **Player Settings:** Manage User-Agent strings and define `ffmpeg` stream profiles.
 -   **User Management (Admin):** Admins can create, edit, and delete user accounts.
 
+### Reverse-proxy (SSO) authentication — optional
+
+If you run ViniPlay behind an authenticating reverse proxy (e.g. `oauth2-proxy`, Authelia, Authentik, Traefik forward-auth), the proxy has already authenticated the user. You can let ViniPlay trust an identity header from the proxy and log the user in automatically, so its own login form is skipped and you don't have to maintain a second password. Users are auto-provisioned on first sight. Configure it with these environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PROXY_AUTH_ENABLED` | `false` | Set to `true` to enable reverse-proxy authentication. |
+| `PROXY_AUTH_HEADER` | `X-Forwarded-Email` | The request header carrying the authenticated user's identity (used as the ViniPlay username). For `oauth2-proxy`, enable `--pass-user-headers=true` (or `--set-xauthrequest=true` and use `X-Auth-Request-Email`). |
+| `PROXY_AUTH_TRUSTED_IPS` | *(empty)* | Comma-separated list of proxy source IPs/CIDRs allowed to supply the identity header, e.g. `172.31.0.0/16`. Matched against the request's real TCP peer, **never** `X-Forwarded-For`. **Required:** if empty while enabled, the header is never trusted (fail closed). |
+| `PROXY_AUTH_ADMIN_USERS` | *(empty)* | Comma-separated identities that are provisioned as admins. Additionally, if no admin exists yet, the first proxy-authenticated user becomes admin (bootstrap). |
+
+> **Security:** only enable this when a proxy in front of ViniPlay is the **only** way to reach it. The identity header is trusted solely when the connecting IP is in `PROXY_AUTH_TRUSTED_IPS`; a client able to reach ViniPlay directly and set the header could otherwise impersonate any user. Auto-provisioned users have no local password and authenticate only through the proxy. Note that ViniPlay's own logout only clears the ViniPlay session — the next request from the proxy re-authenticates immediately; to fully sign out, sign out at the proxy.
+
 ---
 ## 🏗️ Project Structure
 
