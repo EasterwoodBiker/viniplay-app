@@ -374,9 +374,18 @@ if (sessionSecret.includes('replace_this')) {
     console.warn('[SECURITY] Using a weak or default SESSION_SECRET. Please replace it.');
 }
 
+// Give the session store's SQLite connection a busy_timeout so a write waits for a
+// held lock instead of failing immediately with SQLITE_BUSY. This matters when the
+// shared DB is briefly busy (e.g. startup source processing) or when several
+// requests persist a session at nearly the same moment — notably the burst of
+// parallel API calls a client fires on first load when reverse-proxy auth
+// (PROXY_AUTH_ENABLED) logs it in.
+const sessionStore = new SQLiteStore({ db: 'viniplay.db', dir: DATA_DIR, table: 'sessions' });
+sessionStore.db.run('PRAGMA busy_timeout = 8000');
+
 app.use(
     session({
-        store: new SQLiteStore({ db: 'viniplay.db', dir: DATA_DIR, table: 'sessions' }),
+        store: sessionStore,
         secret: sessionSecret,
         resave: false,
         saveUninitialized: false,
